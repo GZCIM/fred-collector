@@ -1,0 +1,35 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: fred-bulk-collector
+  namespace: gzc-analytics
+spec:
+  ttlSecondsAfterFinished: 3600  # Keep for 1 hour after completion
+  template:
+    spec:
+      nodeSelector:
+        workload: bulk-collection  # Target high-memory node pool
+      tolerations:
+      - key: workload
+        operator: Equal
+        value: bulk-collection
+        effect: NoSchedule
+      containers:
+      - name: bulk-collector
+        image: gzcacr.azurecr.io/fred-bulk-collector:v10-k8s-fix
+        imagePullPolicy: Always
+        envFrom:
+        - secretRef:
+            name: fred-api-keys-all
+        env:
+        - name: MAX_CONCURRENT
+          value: "2"  # Reduce concurrency to lower memory pressure
+        resources:
+          requests:
+            memory: "32Gi"
+            cpu: "2000m"
+          limits:
+            memory: "128Gi"  # Adjusted for Standard_E16s_v3 (128GB RAM)
+            cpu: "16000m"
+      restartPolicy: Never
+  backoffLimit: 3

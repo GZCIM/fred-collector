@@ -1,0 +1,6 @@
+deltalake>=1.0.0
+polars>=0.20.0
+adlfs>=2024.0.0
+azure-identity>=1.15.0
+pyarrow>=14.0.0
+pandas>=2.0.0

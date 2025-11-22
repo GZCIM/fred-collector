@@ -1,0 +1,161 @@
+# Delta Lake Configuration for FRED Data Pipeline
+# Replace all {{ PLACEHOLDER }} values with actual values from Azure
+
+# Azure Storage Configuration
+storage:
+  account_name: "gzcstorageaccount"  # e.g., gzcstorageaccount
+  container: "macroeconomic-maintained-series"
+  base_path: "US_Fred_Data"
+
+# Azure Authentication
+authentication:
+  # Option 1: Managed Identity (Recommended for production)
+  use_managed_identity: true
+  client_id: "ae954be9-9a46-4085-849a-191d8884119c"  # Managed identity client ID
+  tenant_id: "8274c97d-de9d-4328-98cf-2d4ee94bf104"
+
+  # Option 2: Service Principal (For local development)
+  # use_managed_identity: false
+  # client_id: "{{ SERVICE_PRINCIPAL_CLIENT_ID }}"
+  # client_secret: "{{ SERVICE_PRINCIPAL_SECRET }}"  # Store in Azure Key Vault
+  # tenant_id: "{{ AZURE_TENANT_ID }}"
+
+# Spark Configuration
+spark:
+  app_name: "FRED Delta Lake Pipeline"
+
+  # Executor configuration (adjust based on workload)
+  executor:
+    instances: 3
+    cores: 4
+    memory: "8g"
+
+  # Driver configuration
+  driver:
+    cores: 2
+    memory: "4g"
+
+  # Delta Lake version
+  delta_version: "2.4.0"
+  scala_version: "2.12"
+
+# Delta Lake Table Configuration
+tables:
+  series_observations:
+    partition_columns: ["series_id"]
+    z_order_columns: ["date", "vintage_date"]
+    optimize_after_rows: 100000  # Run OPTIMIZE after N rows inserted
+
+  series_metadata:
+    partition_columns: []
+    z_order_columns: ["release_id", "frequency"]
+    optimize_after_rows: 10000
+
+  release_metadata:
+    partition_columns: []
+    z_order_columns: ["last_updated_by_fred"]
+    optimize_after_rows: 1000
+
+  collection_history:
+    partition_columns: []
+    z_order_columns: []
+    optimize_after_rows: 1000
+
+# Delta Lake Properties
+delta_properties:
+  log_retention_days: 30
+  deleted_file_retention_days: 7
+  auto_optimize_write: true
+  auto_compact: true
+  checkpoint_interval: 10  # Checkpoint every N commits
+
+# Data Quality Settings
+data_quality:
+  # Validation rules
+  validate_schema: true
+  reject_null_series_id: true
+  reject_null_date: true
+
+  # Deduplication
+  deduplicate_on_merge: true
+  dedup_keys: ["series_id", "date", "vintage_date"]
+
+# Performance Tuning
+performance:
+  # Batch sizes
+  write_batch_size: 10000  # Rows per write batch
+  merge_batch_size: 50000  # Rows per merge operation
+
+  # Optimization schedule
+  optimize_interval_hours: 24  # Run OPTIMIZE daily
+  vacuum_interval_days: 7  # Run VACUUM weekly
+  vacuum_retention_hours: 168  # 7 days
+
+  # Caching
+  cache_metadata: true
+  cache_partitions: true
+
+# Monitoring & Logging
+monitoring:
+  # Application Insights
+  app_insights_enabled: true
+  app_insights_key: "{{ APP_INSIGHTS_KEY }}"
+
+  # Logging level
+  log_level: "INFO"  # DEBUG, INFO, WARN, ERROR
+
+  # Metrics
+  track_row_counts: true
+  track_merge_stats: true
+  track_performance_metrics: true
+
+# Event Hub Integration (for notifications)
+event_hub:
+  enabled: true
+  namespace: "{{ EVENT_HUB_NAMESPACE }}"
+
+  topics:
+    data_updated: "fred-data-updates"
+    errors: "fred-errors"
+
+  connection_string: "{{ EVENT_HUB_CONNECTION_STRING }}"  # From Key Vault
+
+# FRED API Configuration (for reference)
+fred_api:
+  base_url: "https://api.stlouisfed.org/fred"
+  version: "v2"
+  rate_limit: 120  # requests per minute
+  timeout_seconds: 120
+
+  # API keys stored in Azure Key Vault
+  key_vault:
+    name: "gzc-finma-keyvault"
+    secret_prefix: "fred-api-key-"
+    total_keys: 9
+
+# Retry Configuration
+retry:
+  max_attempts: 3
+  initial_delay_seconds: 5
+  backoff_multiplier: 2
+  max_delay_seconds: 60
+
+# Environment-specific overrides
+environments:
+  development:
+    spark:
+      executor:
+        instances: 1
+        cores: 2
+        memory: "4g"
+    performance:
+      optimize_interval_hours: 168  # Weekly in dev
+
+  production:
+    spark:
+      executor:
+        instances: 5
+        cores: 8
+        memory: "16g"
+    performance:
+      optimize_interval_hours: 12  # Twice daily in prod

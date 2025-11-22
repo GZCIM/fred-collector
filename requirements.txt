@@ -1,0 +1,21 @@
+# FRED Collector Service - Python Dependencies
+
+# Core dependencies
+httpx==0.25.2
+pyspark==3.4.1
+delta-spark==2.4.0
+pyyaml==6.0.1
+
+# Azure dependencies
+azure-identity==1.15.0
+azure-keyvault-secrets==4.7.0
+azure-storage-blob==12.19.0
+azure-eventhub==5.11.5
+
+# Monitoring and logging
+opencensus-ext-azure==1.1.13
+python-json-logger==2.0.7
+
+# Utilities
+python-dateutil==2.8.2
+pytz==2023.3

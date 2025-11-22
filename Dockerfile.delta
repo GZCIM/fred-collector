@@ -1,0 +1,22 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install Azure CLI (for blob listing)
+RUN apt-get update && \
+    apt-get install -y curl && \
+    curl -sL https://aka.ms/InstallAzureCLIDeb | bash && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+RUN pip install --no-cache-dir \
+    deltalake \
+    polars \
+    pyarrow
+
+# Copy converter script
+COPY parquet_to_delta.py .
+
+# Entry point - expects VINTAGE_DATE env var
+CMD ["sh", "-c", "python parquet_to_delta.py ${VINTAGE_DATE}"]

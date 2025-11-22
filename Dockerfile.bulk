@@ -1,0 +1,20 @@
+# FRED Bulk Collector - Lightweight image (NO SPARK)
+# Just downloads data and saves to blob storage
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies
+RUN pip install --no-cache-dir \
+    httpx \
+    pyarrow \
+    azure-storage-blob \
+    azure-identity \
+    aiohttp \
+    aiofiles
+
+COPY bulk_collector.py .
+
+# Run the bulk collector
+CMD ["python", "bulk_collector.py"]

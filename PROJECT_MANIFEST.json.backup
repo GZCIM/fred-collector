@@ -1,0 +1,221 @@
+{
+  "project_name": "FRED Collector Service",
+  "project_id": "fred-collector",
+  "version": "1.0.0",
+  "status": "operational",
+  "deployment_environment": "kubernetes",
+  "category": "data-collection",
+  "description": "Containerized service for collecting FRED economic data using V2 bulk API and storing in Azure Delta Lake with vintage tracking",
+  "created_date": "2025-11-19",
+  "last_updated": "2025-11-20",
+  "owner": "Data Engineering Team",
+
+  "repository": {
+    "type": "git",
+    "location": "/Users/mikaeleage/Research & Analytics Services/Projects/azure-data-pipelines/services/fred-collector",
+    "parent_project": "azure-data-pipelines"
+  },
+
+  "technology_stack": {
+    "language": "Python",
+    "version": "3.10",
+    "framework": "PySpark 3.4.1",
+    "data_platform": "Delta Lake 2.4.0",
+    "container_runtime": "Docker",
+    "orchestration": "Kubernetes",
+    "cloud_provider": "Azure"
+  },
+
+  "dependencies": {
+    "core": [
+      "httpx==0.25.2",
+      "pyspark==3.4.1",
+      "delta-spark==2.4.0",
+      "pyyaml==6.0.1"
+    ],
+    "azure": [
+      "azure-identity==1.15.0",
+      "azure-keyvault-secrets==4.7.0",
+      "azure-storage-blob==12.19.0",
+      "azure-eventhub==5.11.5"
+    ],
+    "monitoring": [
+      "opencensus-ext-azure==1.1.13",
+      "python-json-logger==2.0.7"
+    ]
+  },
+
+  "azure_resources": {
+    "storage_account": "gzcstorageaccount",
+    "container": "macroeconomic-maintained-series",
+    "key_vault": "gzc-finma-keyvault",
+    "managed_identity": "ae954be9-9a46-4085-849a-191d8884119c",
+    "event_hub_namespace": "TBD",
+    "event_hub_topic": "fred-data-updated",
+    "kubernetes_cluster": "gzc-k8s-engine",
+    "kubernetes_namespace": "fred-pipeline",
+    "container_registry": "gzcacr.azurecr.io"
+  },
+
+  "components": {
+    "collector.py": {
+      "purpose": "Core FRED V2 API collection logic with round-robin API key rotation",
+      "features": [
+        "V2 bulk API integration with pagination",
+        "9 API keys with round-robin rotation",
+        "DataFrame transformation",
+        "Delta Lake merge integration",
+        "Parallel and sequential collection modes"
+      ]
+    },
+    "main.py": {
+      "purpose": "Service entry point with Event Hub integration",
+      "features": [
+        "Event Hub consumer (production mode)",
+        "One-time batch collection (initial load mode)",
+        "Azure Key Vault secrets management",
+        "Spark session lifecycle management",
+        "Graceful shutdown handling"
+      ]
+    },
+    "delta_lake/merge_logic.py": {
+      "purpose": "Delta Lake merge/upsert operations with vintage tracking",
+      "features": [
+        "Incremental updates with change detection",
+        "Historical vintage preservation",
+        "Revision tracking",
+        "Auto-initialization of Delta tables",
+        "Collection history logging"
+      ]
+    },
+    "delta_lake/schemas.py": {
+      "purpose": "Delta Lake table schemas and partitioning definitions",
+      "features": [
+        "4 table schemas (observations, series metadata, release metadata, collection history)",
+        "Partition and Z-order column definitions",
+        "Open-source Delta Lake properties (no Databricks dependencies)"
+      ]
+    },
+    "Dockerfile": {
+      "purpose": "Container definition with critical PySpark 3.4.1 fixes",
+      "features": [
+        "Python 3.10 base image",
+        "Java 11 (Temurin)",
+        "PySpark 3.4.1 typing.io bug patch (SPARK-44169)",
+        "Non-root user security",
+        "Health checks"
+      ]
+    }
+  },
+
+  "critical_fixes": {
+    "fix_1_pyspark_typing": {
+      "issue": "PySpark 3.4.1 has typing.io import bug (SPARK-44169) causing worker crashes",
+      "solution": "Patch pyspark.zip archive with correct 'from typing import BinaryIO' (Dockerfile lines 37-51)",
+      "status": "implemented",
+      "build": "ca41"
+    },
+    "fix_2_python_paths": {
+      "issue": "Workers couldn't find Python 3.10 executable, defaulting to Python 2",
+      "solution": "Explicit PYSPARK_PYTHON and PYSPARK_DRIVER_PYTHON env vars (Dockerfile lines 62-64)",
+      "status": "implemented",
+      "build": "ca41"
+    },
+    "fix_3_table_auto_init": {
+      "issue": "Delta Lake tables must exist before merge operations",
+      "solution": "Added _ensure_table_exists() method that creates tables on-demand (merge_logic.py lines 75-107)",
+      "status": "implemented",
+      "build": "ca42"
+    },
+    "fix_4_databricks_properties": {
+      "issue": "autoOptimize.optimizeWrite and autoOptimize.autoCompact are Databricks-only",
+      "solution": "Removed Databricks-specific properties, using only open-source Delta Lake properties (schemas.py lines 159-163)",
+      "status": "implemented",
+      "build": "ca43"
+    }
+  },
+
+  "deployment": {
+    "current_build": "ca43",
+    "container_image": "gzcacr.azurecr.io/fred-collector:ca43",
+    "kubernetes_deployment": "fred-collector",
+    "kubernetes_namespace": "fred-pipeline",
+    "replicas": {
+      "min": 2,
+      "max": 10,
+      "autoscaling": true
+    },
+    "resources": {
+      "cpu": {
+        "request": "2",
+        "limit": "4"
+      },
+      "memory": {
+        "request": "8Gi",
+        "limit": "16Gi"
+      }
+    },
+    "run_modes": {
+      "event_hub": "Production listener mode (subscribes to Event Hub)",
+      "one_time": "Batch collection mode (collects all releases once)"
+    }
+  },
+
+  "performance": {
+    "collection_speed": {
+      "v2_api": "~3 seconds for 13,715 observations",
+      "v1_api_comparison": "100-200x slower (5-10 minutes)",
+      "api_capacity": "1,080 req/min theoretical (9 keys × 120 req/min)",
+      "safe_sustained": "~500 req/min with retry handling"
+    },
+    "resource_usage": {
+      "cpu_per_pod": "2 cores (bursts to 4)",
+      "memory_per_pod": "8 GB",
+      "storage": "Minimal (writes to Delta Lake)"
+    }
+  },
+
+  "monitoring": {
+    "logs": "kubectl logs -f deployment/fred-collector -n fred-pipeline",
+    "health_check": "kubectl get pods -n fred-pipeline -l app=fred-collector",
+    "metrics": [
+      "Collection duration per release",
+      "Observations inserted/updated/deleted",
+      "API calls made",
+      "Success/failure rates",
+      "Memory and CPU usage"
+    ]
+  },
+
+  "testing": {
+    "unit_tests": "TODO",
+    "integration_tests": "Manual testing with release 441 (4 series, 13,715 observations)",
+    "test_results": "✅ Successfully tested with release 441 - 3 seconds collection time"
+  },
+
+  "documentation": {
+    "readme": "README.md",
+    "deployment_guide": "DEPLOYMENT.md",
+    "parent_implementation_plan": "../../../docs/IMPLEMENTATION_PLAN.md",
+    "delta_lake_guide": "../../../infrastructure/delta-lake/README.md"
+  },
+
+  "next_steps": [
+    "Deploy release-monitor service (Phase 3)",
+    "Set up Application Insights dashboards",
+    "Configure alert rules",
+    "Optimize Spark executor configuration",
+    "Adjust auto-scaling rules based on production metrics"
+  ],
+
+  "contact": {
+    "team": "Data Engineering",
+    "support": "Check logs with kubectl, review /docs/IMPLEMENTATION_PLAN.md"
+  },
+
+  "output_signature": {
+    "enabled": true,
+    "agent_name": "README Agent",
+    "output_types": ["json", "markdown"]
+  }
+}

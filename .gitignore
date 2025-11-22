@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Secrets (CRITICAL - never commit!)
+*.env
+.env.*
+**/secrets/
+credentials.json
+*.key
+*.pem
+
+# Build artifacts
+dist/
+build/
+*.egg
+
+# Docker
+.dockerignore
+
+# Azure
+.azure/
+
+# Testing
+.coverage
+htmlcov/
+
+# Query tool virtual environment
+query_tool/.venv/
+query_tool/venv/
+
+# Temporary files
+*.tmp
+*.bak
+*~
