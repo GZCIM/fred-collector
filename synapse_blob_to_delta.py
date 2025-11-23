@@ -67,12 +67,21 @@ except Exception as e:
 # Step 2: Add transformations
 print("\nStep 2: Transforming data...")
 
-# Ensure release_date column exists (add null if missing)
+# Note: Blob files have already been patched with:
+#   - release_date (FRED publication date)
+#   - collected_at (our collection timestamp, renamed from vintage_date)
+
+# Ensure required columns exist
 if "release_date" not in df.columns:
+    print("⚠️  Warning: release_date missing, adding as null")
     df = df.withColumn("release_date", lit(None))
 
-# Add collection vintage and partition columns
-transformed_df = df.withColumn("collection_vintage", lit(VINTAGE_DATE)) \
+if "collected_at" not in df.columns:
+    print("⚠️  Warning: collected_at missing, adding from VINTAGE_DATE parameter")
+    df = df.withColumn("collected_at", lit(VINTAGE_DATE))
+
+# Add partition columns for query performance
+transformed_df = df \
     .withColumn("year", substring(col("date"), 1, 4).cast("int")) \
     .withColumn("month", substring(col("date"), 6, 2).cast("int"))
 
@@ -94,14 +103,15 @@ print("\nStep 4: Quality control checks...")
 qc_passed = True
 
 # Check 1: Required columns
-required_cols = ["series_id", "date", "value", "vintage_date", "collected_at",
-                 "release_id", "release_date", "collection_vintage", "year", "month"]
+# Note: Blob files after patching have: series_id, date, value, release_id, release_date, collected_at
+required_cols = ["series_id", "date", "value", "release_id", "release_date",
+                 "collected_at", "year", "month"]
 missing_cols = [c for c in required_cols if c not in deduped_df.columns]
 if missing_cols:
     print(f"❌ Missing columns: {missing_cols}")
     qc_passed = False
 else:
-    print(f"✅ Schema validation passed")
+    print(f"✅ Schema validation passed (all {len(required_cols)} required columns present)")
 
 # Check 2: No nulls in key columns
 null_checks = deduped_df.select(
