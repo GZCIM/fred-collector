@@ -82,7 +82,7 @@ def convert_py_to_notebook(py_file_path: str, notebook_name: str, spark_pool: st
                     "metadata": {
                         "collapsed": False
                     },
-                    "source": python_code.split('\n'),
+                    "source": [line + '\n' for line in python_code.split('\n')],
                     "outputs": [],
                     "execution_count": None
                 }
