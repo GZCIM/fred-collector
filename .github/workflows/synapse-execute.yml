@@ -25,12 +25,13 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Trigger Synapse Notebook Execution
+      - name: Trigger Synapse Pipeline Execution
         run: |
           echo "=================================="
-          echo "SYNAPSE NOTEBOOK EXECUTION"
+          echo "SYNAPSE PIPELINE EXECUTION"
           echo "=================================="
           echo "Workspace: externaldata"
+          echo "Pipeline: blob_to_delta_pipeline"
           echo "Notebook: blob_to_delta_transformer"
           echo "Vintage Date: ${{ github.event.inputs.vintage_date }}"
           echo "Release ID: ${{ github.event.inputs.release_id || '(all)' }}"
@@ -40,7 +41,7 @@ jobs:
           # Get access token for Synapse REST API
           TOKEN=$(az account get-access-token --resource=https://dev.azuresynapse.net --query accessToken -o tsv)
 
-          # Build parameters JSON
+          # Build parameters JSON for pipeline
           PARAMS=$(cat <<EOF
           {
             "storage_account": "gzcstorageaccount",
@@ -51,25 +52,12 @@ jobs:
           EOF
           )
 
-          # Submit notebook run via REST API (correct endpoint for notebook execution)
+          # Trigger pipeline execution via REST API
           RUN_RESPONSE=$(curl -X POST \
-            "https://externaldata.dev.azuresynapse.net/notebooks/blob_to_delta_transformer/createRun?api-version=2020-12-01" \
+            "https://externaldata.dev.azuresynapse.net/pipelines/blob_to_delta_pipeline/createRun?api-version=2020-12-01" \
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"sparkPoolName\": \"fredsparkpool\",
-              \"sessionProperties\": {
-                \"driverMemory\": \"28g\",
-                \"driverCores\": 4,
-                \"executorMemory\": \"28g\",
-                \"executorCores\": 4,
-                \"numExecutors\": 2,
-                \"conf\": {
-                  \"spark.dynamicAllocation.enabled\": \"false\"
-                }
-              },
-              \"parameters\": $PARAMS
-            }")
+            -d "{\"parameters\": $PARAMS}")
 
           echo "Response: $RUN_RESPONSE"
 
@@ -78,13 +66,13 @@ jobs:
 
           if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
             echo ""
-            echo "✅ Notebook execution started successfully"
+            echo "✅ Pipeline execution started successfully"
             echo "Run ID: $RUN_ID"
             echo ""
             echo "Monitor execution at:"
-            echo "https://web.azuresynapse.net/monitoring/sparkapplication?workspace=%2fsubscriptions%2f6f928fec-8d15-47d7-b27b-be8b568e9789%2fresourceGroups%2fMTWS_Synapse%2fproviders%2fMicrosoft.Synapse%2fworkspaces%2fexternaldata"
+            echo "https://web.azuresynapse.net/monitoring/pipelineruns"
           else
-            echo "❌ Failed to start notebook execution"
+            echo "❌ Failed to start pipeline execution"
             echo "Full response: $RUN_RESPONSE"
             exit 1
           fi
