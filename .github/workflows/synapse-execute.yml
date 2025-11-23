@@ -1,0 +1,126 @@
+name: Execute Synapse Blob-to-Delta Transformation
+
+on:
+  workflow_dispatch:
+    inputs:
+      vintage_date:
+        description: 'Vintage date (YYYY-MM-DD)'
+        required: true
+        default: '2025-11-21'
+      release_id:
+        description: 'Release ID (leave empty for all releases)'
+        required: false
+        default: ''
+
+jobs:
+  execute-transformation:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Install Azure Synapse Extension
+        run: |
+          az extension add --name synapse --upgrade
+
+      - name: Trigger Synapse Notebook Execution
+        run: |
+          echo "=================================="
+          echo "SYNAPSE NOTEBOOK EXECUTION"
+          echo "=================================="
+          echo "Workspace: externaldata"
+          echo "Notebook: blob_to_delta_transformer"
+          echo "Vintage Date: ${{ github.event.inputs.vintage_date }}"
+          echo "Release ID: ${{ github.event.inputs.release_id || '(all)' }}"
+          echo ""
+
+          # Trigger notebook execution using Azure CLI
+          az synapse spark pool create \
+            --name fredsparkpool \
+            --workspace-name externaldata \
+            --resource-group MTWS_Synapse \
+            --node-count 2 \
+            --node-size Medium \
+            --spark-version 3.3 \
+            --enable-auto-scale true \
+            --min-node-count 2 \
+            --max-node-count 4 \
+            --only-show-errors || true  # Pool may already exist
+
+          echo ""
+          echo "Starting notebook execution..."
+
+          # Create Synapse notebook run using REST API (correct endpoint)
+          TOKEN=$(az account get-access-token --resource=https://dev.azuresynapse.net --query accessToken -o tsv)
+
+          # Build parameters JSON
+          PARAMS=$(cat <<EOF
+          {
+            "storage_account": "gzcstorageaccount",
+            "container": "macroeconomic-maintained-series",
+            "vintage_date": "${{ github.event.inputs.vintage_date }}",
+            "release_id": "${{ github.event.inputs.release_id }}"
+          }
+          EOF
+          )
+
+          # Submit notebook run via REST API (correct endpoint for notebook execution)
+          RUN_RESPONSE=$(curl -X POST \
+            "https://externaldata.dev.azuresynapse.net/notebooks/blob_to_delta_transformer/createRun?api-version=2020-12-01" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"sparkPoolName\": \"fredsparkpool\",
+              \"sessionProperties\": {
+                \"driverMemory\": \"28g\",
+                \"driverCores\": 4,
+                \"executorMemory\": \"28g\",
+                \"executorCores\": 4,
+                \"numExecutors\": 2,
+                \"conf\": {
+                  \"spark.dynamicAllocation.enabled\": \"false\"
+                }
+              },
+              \"parameters\": $PARAMS
+            }")
+
+          echo "Response: $RUN_RESPONSE"
+
+          # Extract run ID
+          RUN_ID=$(echo $RUN_RESPONSE | jq -r '.runId // .id // empty')
+
+          if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
+            echo ""
+            echo "✅ Notebook execution started successfully"
+            echo "Run ID: $RUN_ID"
+            echo ""
+            echo "Monitor execution at:"
+            echo "https://web.azuresynapse.net/monitoring/sparkapplication?workspace=%2fsubscriptions%2f6f928fec-8d15-47d7-b27b-be8b568e9789%2fresourceGroups%2fMTWS_Synapse%2fproviders%2fMicrosoft.Synapse%2fworkspaces%2fexternaldata"
+          else
+            echo "❌ Failed to start notebook execution"
+            echo "Full response: $RUN_RESPONSE"
+            exit 1
+          fi
+
+      - name: Monitor Execution (Optional)
+        if: success()
+        run: |
+          echo ""
+          echo "=================================="
+          echo "EXECUTION MONITORING"
+          echo "=================================="
+          echo "The transformation is now running in Azure Synapse."
+          echo ""
+          echo "Expected Duration: 10-15 minutes"
+          echo "Expected Outputs:"
+          echo "  - Delta Lake: US_Fred_Data/series_observations"
+          echo "  - Analysis: US_Fred_Data/analysis/"
+          echo ""
+          echo "Monitor progress at:"
+          echo "https://web.azuresynapse.net/monitoring/sparkapplication"
