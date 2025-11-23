@@ -1,0 +1,62 @@
+name: Deploy Synapse Notebooks
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'synapse_*.py'
+      - '.github/workflows/synapse-deploy.yml'
+  workflow_dispatch:
+    inputs:
+      notebook_name:
+        description: 'Notebook to deploy (leave empty for all)'
+        required: false
+        default: ''
+
+jobs:
+  deploy-notebooks:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Convert Python files to Synapse notebook format
+        run: |
+          python .github/scripts/convert_to_notebook.py
+
+      - name: Deploy to Synapse Workspace
+        uses: Azure/synapse-workspace-deployment@v1.7.0
+        with:
+          TargetWorkspaceName: 'externaldata'
+          ArtifactsFolder: './synapse-artifacts'
+          resourceGroup: 'MTWS_Synapse'
+          subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          clientId: ${{ secrets.AZURE_CLIENT_ID }}
+          clientSecret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          tenantId: ${{ secrets.AZURE_TENANT_ID }}
+          environment: 'Azure Public'
+          operation: 'validateDeploy'
+          DeleteArtifactsNotInTemplate: 'false'
+
+      - name: Deployment Summary
+        run: |
+          echo "✅ Synapse notebook deployment completed"
+          echo "Workspace: externaldata"
+          echo "Resource Group: MTWS_Synapse"
+          echo "Notebooks deployed:"
+          ls -1 synapse-artifacts/notebook/*.json | xargs -n1 basename | sed 's/.json$//'
