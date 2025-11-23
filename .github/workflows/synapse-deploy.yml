@@ -40,7 +40,7 @@ jobs:
           python .github/scripts/convert_to_notebook.py
 
       - name: Deploy to Synapse Workspace
-        uses: Azure/synapse-workspace-deployment@v1.7.0
+        uses: Azure/synapse-workspace-deployment@V1.9.1
         with:
           TargetWorkspaceName: 'externaldata'
           ArtifactsFolder: './synapse-artifacts'
