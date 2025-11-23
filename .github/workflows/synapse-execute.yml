@@ -25,10 +25,6 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Install Azure Synapse Extension
-        run: |
-          az extension add --name synapse --upgrade
-
       - name: Trigger Synapse Notebook Execution
         run: |
           echo "=================================="
@@ -39,24 +35,9 @@ jobs:
           echo "Vintage Date: ${{ github.event.inputs.vintage_date }}"
           echo "Release ID: ${{ github.event.inputs.release_id || '(all)' }}"
           echo ""
+          echo "Getting Azure access token..."
 
-          # Trigger notebook execution using Azure CLI
-          az synapse spark pool create \
-            --name fredsparkpool \
-            --workspace-name externaldata \
-            --resource-group MTWS_Synapse \
-            --node-count 2 \
-            --node-size Medium \
-            --spark-version 3.3 \
-            --enable-auto-scale true \
-            --min-node-count 2 \
-            --max-node-count 4 \
-            --only-show-errors || true  # Pool may already exist
-
-          echo ""
-          echo "Starting notebook execution..."
-
-          # Create Synapse notebook run using REST API (correct endpoint)
+          # Get access token for Synapse REST API
           TOKEN=$(az account get-access-token --resource=https://dev.azuresynapse.net --query accessToken -o tsv)
 
           # Build parameters JSON
